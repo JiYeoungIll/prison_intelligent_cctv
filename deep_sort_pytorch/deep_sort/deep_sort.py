@@ -75,7 +75,7 @@ class DeepSort(object):
 
             action = track.get_action(self.net)
             #action = None
-            print(f"INFO: action {action}")
+            #print(f"INFO: action {action}")
 
             self.draw_boxes(ori_img, bbox, track.track_id, action)
         #     track_id = track.track_id
@@ -119,10 +119,16 @@ class DeepSort(object):
         #    img, (x1, y1), (x1 + t_size[0] + 3, y1 + t_size[1] + 4), color, -1)
         #cv2.putText(img, label, (x1, y1 +
         #                         t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
+
+        # 거리에 따른 글자 크기 조정
+        textsiz = (x2 - x1) * 0.02
+        if textsiz >=2 :
+            textsiz = 2
+        elif textsiz <=1:
+            textsiz = 1
+
         cv2.putText(img, label, (x1 , y1 +
-                                 t_size[1] + 4 ), cv2.FONT_HERSHEY_PLAIN, 2, [0, 255, 0], 2)
-
-
+                                 t_size[1] + 4 ), cv2.FONT_HERSHEY_PLAIN, textsiz, [0, 255, 0], 2)
         return img
 
     @staticmethod

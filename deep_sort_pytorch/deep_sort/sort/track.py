@@ -109,8 +109,6 @@ class Track:
         clip_input = self.frames
         transform_fn = video.VideoGroupValTransform(size=224, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         clip_input = transform_fn(clip_input)
-        print(f"INFO: action input shape:")
-        print([clip.shape for clip in clip_input])
         clip_input = np.stack(clip_input, axis=0)
         clip_input = clip_input.reshape((-1,) + (16, 3, 224, 224))
 
@@ -121,27 +119,21 @@ class Track:
         # print(pred)
 
         classes = net.classes
-        topK = 2
+        topK = 1
         ind = nd.topk(pred, k=topK)[0].astype('int')
 
-        print("-----------------------------------------------------------------------------------------")
-        for i in range(topK):
-            print('\t[%s], with probability %.3f.' %
-                  (classes[ind[i].asscalar()], nd.softmax(pred)[0][ind[i]].asscalar()))
-        print("-----------------------------------------------------------------------------------------")
 
         num = ind[0].asscalar()
-        return classes[num]
+        if round(nd.softmax(pred)[0][ind[0]].asscalar(),2) >= 0.4 :
+            print(f'{round(nd.softmax(pred)[0][ind[0]].asscalar(),2)}')
+            return classes[num]
+        else :
+            return None
+
 
         # 확률 50% 이상만 라벨 인정
         #if round(nd.softmax(pred)[0][ind[i]].asscalar(), 3) > 0.4 and classes[ind[0].asscalar()] == 'walk':
-        '''if  ((pred[0][num]-pred[0][49]) < 1) or ((pred[0][49]-pred[0][num]) < 1) or classes[num] == 'walk':
-            print(f'-----------pred[0][num]{pred[0][num]}')
-            #return classes[ind[0].asscalar()]
-            return 'walk'
-        else :
-            return None'''
-        # num <=50
+
         '''
         if  num <= 50:
             if ((pred[0][num] - pred[0][49]) < 1) :

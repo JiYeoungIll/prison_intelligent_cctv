@@ -68,7 +68,7 @@ while True:
     cv2.putText(frame, label, (10, 100), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
     
     frame = Image.fromarray(frame[..., ::-1])
-    print(f"INFO: FPS {runtime_fps:.2f} {action}")
+    #print(f"INFO: FPS {runtime_fps:.2f} {action}")
     frame.save(pipe.stdin, 'JPEG')
     
 

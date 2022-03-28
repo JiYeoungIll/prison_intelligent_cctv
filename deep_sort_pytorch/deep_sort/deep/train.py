@@ -106,10 +106,10 @@ def train(epoch):
         # print
         if (idx+1) % interval == 0:
             end = time.time()
-            print("[progress:{:.1f}%]time:{:.2f}s Loss:{:.5f} Correct:{}/{} Acc:{:.3f}%".format(
+            '''print("[progress:{:.1f}%]time:{:.2f}s Loss:{:.5f} Correct:{}/{} Acc:{:.3f}%".format(
                 100.*(idx+1)/len(trainloader), end-start, training_loss /
                 interval, correct, total, 100.*correct/total
-            ))
+            ))'''
             training_loss = 0.
             start = time.time()
 
