@@ -8,8 +8,8 @@ from gluoncv.data.transforms import video
 from gluoncv import utils
 import numpy as np
 import cv2
-
 from gluoncv.data.transforms.pose import detector_to_alpha_pose, heatmap_to_coord_alpha_pose
+
 
 class TrackState:
     """
@@ -69,8 +69,8 @@ class Track:
     features : List[ndarray]
         A cache of features. On each measurement update, the associated feature
         vector is added to this list.
-
     """
+
 
     def __init__(self, mean, covariance, track_id, n_init, max_age,
                  feature=None):
@@ -89,9 +89,14 @@ class Track:
         self._n_init = n_init
         self._max_age = max_age
 
+
+        # Fighting Mode 일시 16으로 설정
         self.SAMPLE_DURATION = 16
+        # 명령 Mode 일시 32으로 설정
+
         self.frames = deque(maxlen=self.SAMPLE_DURATION)
         self.action = None
+
 
     def update_frames(self, bbox, image):
         # crop image with bbox roi
@@ -105,51 +110,54 @@ class Track:
         if len(self.frames) < self.SAMPLE_DURATION:
             return None
 
-
         clip_input = self.frames
         transform_fn = video.VideoGroupValTransform(size=224, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         clip_input = transform_fn(clip_input)
+        print(f"INFO: action input shape:")
+        print([clip.shape for clip in clip_input])
         clip_input = np.stack(clip_input, axis=0)
+
+
+        # Fighting Mode 일시 16으로 설정
         clip_input = clip_input.reshape((-1,) + (16, 3, 224, 224))
+        # 명령 Mode 일시 32으로 설정
 
         clip_input = np.transpose(clip_input, (0, 2, 1, 3, 4))
+
+
+        # pred는 2차원배열이며, type이 ndarry : <class 'mxnet.ndarray.ndarray.NDArray'>
         pred = net(nd.array(clip_input, ctx=mx.gpu(0)))
 
-        # pred는 2차원배열 근데  type이 ndarry!, <class 'mxnet.ndarray.ndarray.NDArray'>
-        # print(pred)
-
+        # topk로 라벨 분류 최종 갯수 선택 가능
         classes = net.classes
-        topK = 1
+        topK = 2
         ind = nd.topk(pred, k=topK)[0].astype('int')
 
+        # 라벨 종류 출력
+        print("-----------------------------------------------------------------------------------------")
+        for i in range(topK):
+            print('\t[%s], with probability %.3f.' %
+                  (classes[ind[i].asscalar()], nd.softmax(pred)[0][ind[i]].asscalar()))
+        print("-----------------------------------------------------------------------------------------")
 
         num = ind[0].asscalar()
-        if round(nd.softmax(pred)[0][ind[0]].asscalar(),3) >= 0.35 :
-            print(f'{round(nd.softmax(pred)[0][ind[0]].asscalar(),2)}')
-            #return classes[num]
-            import random
-            myList = [1,2,3]
-            random.shuffle(myList)
-            if myList[0] != 1 :
-                return "H"
-            else:
-                return "P"
 
-        else :
-            return None
+        # 확률 35% 이상일 시 확률 출력 및 실행
+        if round(nd.softmax(pred)[0][ind[0]].asscalar(), 3) >= 0.35:
+            print(f'{round(nd.softmax(pred)[0][ind[0]].asscalar(), 2)}')
 
-
-        # 확률 50% 이상만 라벨 인정
-        #if round(nd.softmax(pred)[0][ind[i]].asscalar(), 3) > 0.4 and classes[ind[0].asscalar()] == 'walk':
-
-        '''
-        if  num <= 50:
-            if ((pred[0][num] - pred[0][49]) < 1) :
-                return 'walk'
             return classes[num]
-        else : return None
-        '''
 
+            # import random
+            # myList = [1, 2, 3]
+            # random.shuffle(myList)
+            #if myList[0] != 1:
+            #    return "H"
+            #else:
+            #    return "P"
+
+        else:
+            return None
 
 
     def to_tlwh(self):
@@ -165,7 +173,9 @@ class Track:
         ret = self.mean[:4].copy()
         ret[2] *= ret[3]
         ret[:2] -= ret[2:] / 2
+
         return ret
+
 
     def to_tlbr(self):
         """Get current position in bounding box format `(min x, miny, max x,
@@ -179,11 +189,14 @@ class Track:
         """
         ret = self.to_tlwh()
         ret[2:] = ret[:2] + ret[2:]
+
         return ret
+
 
     def increment_age(self):
         self.age += 1
         self.time_since_update += 1
+
 
     def predict(self, kf):
         """Propagate the state distribution to the current time step using a
@@ -197,6 +210,7 @@ class Track:
         """
         self.mean, self.covariance = kf.predict(self.mean, self.covariance)
         self.increment_age()
+
 
     def update(self, kf, detection):
         """Perform Kalman filter measurement update step and update the feature
@@ -219,6 +233,7 @@ class Track:
         if self.state == TrackState.Tentative and self.hits >= self._n_init:
             self.state = TrackState.Confirmed
 
+
     def mark_missed(self):
         """Mark this track as missed (no association at the current time step).
         """
@@ -227,14 +242,17 @@ class Track:
         elif self.time_since_update > self._max_age:
             self.state = TrackState.Deleted
 
+
     def is_tentative(self):
         """Returns True if this track is tentative (unconfirmed).
         """
         return self.state == TrackState.Tentative
 
+
     def is_confirmed(self):
         """Returns True if this track is confirmed."""
         return self.state == TrackState.Confirmed
+
 
     def is_deleted(self):
         """Returns True if this track is dead and should be deleted."""

@@ -9,11 +9,11 @@ from .sort.detection import Detection
 from .sort.tracker import Tracker
 from gluoncv.model_zoo import get_model
 import mxnet as mx
-import time
 
 
 __all__ = ['DeepSort']
 palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
+
 
 class DeepSort(object):
     def __init__(self, model_path, max_dist=0.2, min_confidence=0.3, nms_max_overlap=1.0, max_iou_distance=0.7, max_age=70, n_init=3, nn_budget=100, use_cuda=True):
@@ -30,19 +30,24 @@ class DeepSort(object):
             metric, max_iou_distance=max_iou_distance, max_age=max_age, n_init=n_init)
 
 
-        # model_name = 'i3d_resnet50_v1_hmdb51' #
-        model_name = 'i3d_resnet50_v1_sthsthv2' # 싸움인식 모델
+        # Fighting Mode 모델
+        model_name = 'i3d_resnet50_v1_sthsthv2'
+        # 명령 Mode 모델
+        # model_name = 'i3d_resnet50_v1_hmdb51'
+
         self.net = get_model(model_name, pretrained=True)
 
         with mx.Context('gpu', 0):  # Context changed in `with` block.
             self.net.collect_params().reset_ctx(ctx=mx.current_context())
-            #self.net.initialize(force_reinit=True, ctx=mx.current_context())
+            # self.net.initialize(force_reinit=True, ctx=mx.current_context())
 
+        # GPU 사용 및 모델 로드 성공인지 출력
         print(f"Currently using {mx.gpu(0)}")
         print('%s model is successfully loaded.' % model_name)
-    clear = []
+
+
     def update(self, bbox_xywh, confidences, ori_img):
-        global clear
+
         self.height, self.width = ori_img.shape[:2]
         # generate detections
         features = self._get_features(bbox_xywh, ori_img)
@@ -56,12 +61,13 @@ class DeepSort(object):
         indices = non_max_suppression(boxes, self.nms_max_overlap, scores)
         detections = [detections[i] for i in indices]
 
-
         # update tracker
         self.tracker.predict()
         self.tracker.update(detections)
-        #사람 카운트 초기화
+
+        # 인원 수 카운트 변수 초기화
         count = 0
+
         # output bbox identities
         for track in self.tracker.tracks:
             if not track.is_confirmed() or track.time_since_update > 1:
@@ -75,15 +81,15 @@ class DeepSort(object):
             track.update_frames(bbox, ori_img)
             # print(f"INFO: len action_frames: {len(track.frames)}")
 
-            action = track.get_action(self.net)
-            #action = None
-            #print(f"INFO: action {action}")
-            # action = "Fight!!!"
-            count +=1
-
+            # action 인식하고 출력하는 부분
+            # action = track.get_action(self.net)
+            action = 'Hitting something with something'
+            print(f"INFO: action {action}")
+            count += 1
 
             self.draw_boxes(ori_img, bbox, track.track_id, action)
-        #사람수 count
+
+        # 인원 수 count
         counting_text = "People Counting : {}".format(count)
         cv2.putText(ori_img, counting_text, (10, ori_img.shape[0] - 25), cv2.LINE_AA, 0.85, (0, 0, 255), 2)
 
@@ -92,6 +98,7 @@ class DeepSort(object):
         # if len(outputs) > 0:
         #     outputs = np.stack(outputs, axis=0)
         # return outputs
+
         return ori_img
 
     """
@@ -100,9 +107,10 @@ class DeepSort(object):
     Thanks JieChen91@github.com for reporting this bug!
     """
 
+
     @staticmethod
     def draw_boxes(img, bbox, identities=None, action=None, offset=(0, 0)):
-        
+
         # for i, box in enumerate(bbox):
         x1, y1, x2, y2 = [int(i) for i in bbox]
         x1 += offset[0]
@@ -111,7 +119,6 @@ class DeepSort(object):
         y2 += offset[1]
         # box text and bar
         id = int(identities)
-
         color = DeepSort.compute_color_for_labels(id)
         if action:
             label = f"{id}_{action}"
@@ -119,27 +126,39 @@ class DeepSort(object):
             label = '{}{:d}'.format("", id)
         t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
 
-        ROI = img[y1: y2, x1: x2]
-        ROI = cv2.add(ROI, (10, 40, 10, 0))
-        #ROI = cv2.add(ROI, (50, 80, 50, 0))
+        # 초록색 인식 박스 그려주는 부분
+        if action == 'Hitting something with something' :
+            ROI_box = img[y1: y2, x1: x2]
+            ROI_box = cv2.add(ROI_box, (25, 12, 0, 0))
+            img[y1: y2, x1: x2] = ROI_box
+        else:
+            ROI_box = img[y1: y2, x1: x2]
+            ROI_box = cv2.add(ROI_box, (10, 40, 10, 0))
+            img[y1: y2, x1: x2] = ROI_box
 
-        img[y1: y2, x1: x2] = ROI
         #cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
         #cv2.rectangle(
         #    img, (x1, y1), (x1 + t_size[0] + 3, y1 + t_size[1] + 4), color, -1)
         #cv2.putText(img, label, (x1, y1 +
         #                         t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
 
-        # 거리에 따른 글자 크기 조정
-        textsiz = (x2 - x1) * 0.02
-        if textsiz >=2 :
-            textsiz = 2
-        elif textsiz <=1:
-            textsiz = 1
-
         cv2.putText(img, label, (x1 , y1 +
-                                 t_size[1] + 4 ), cv2.FONT_HERSHEY_PLAIN, textsiz, [0, 255, 0], 2)
+                                 t_size[1] + 4 ), cv2.FONT_HERSHEY_PLAIN, 2, [0, 255, 0], 2)
+
+
+        # 거리에 따른 라벨 글자 크기 조정
+        textsize = (x2 - x1) * 0.02
+
+        if textsize >= 2:
+            textsize = 2
+        elif textsize <= 1:
+            textsize = 1
+
+        cv2.putText(img, label, (x1, y1 +
+                                 t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, textsize, [0, 255, 0], 2)
+
         return img
+
 
     @staticmethod
     def compute_color_for_labels(label):
@@ -148,6 +167,7 @@ class DeepSort(object):
         """
         color = [int((p * (label ** 2 - label + 1)) % 255) for p in palette]
         return tuple(color)
+
 
     @staticmethod
     def _xywh_to_tlwh(bbox_xywh):
@@ -159,6 +179,7 @@ class DeepSort(object):
         bbox_tlwh[:, 1] = bbox_xywh[:, 1] - bbox_xywh[:, 3] / 2.
         return bbox_tlwh
 
+
     def _xywh_to_xyxy(self, bbox_xywh):
         x, y, w, h = bbox_xywh
         x1 = max(int(x - w / 2), 0)
@@ -166,6 +187,7 @@ class DeepSort(object):
         y1 = max(int(y - h / 2), 0)
         y2 = min(int(y + h / 2), self.height - 1)
         return x1, y1, x2, y2
+
 
     def _tlwh_to_xyxy(self, bbox_tlwh):
         """
@@ -180,8 +202,10 @@ class DeepSort(object):
         y2 = min(int(y+h), self.height - 1)
         return x1, y1, x2, y2
 
+
     def increment_ages(self):
         self.tracker.increment_ages()
+
 
     def _xyxy_to_tlwh(self, bbox_xyxy):
         x1, y1, x2, y2 = bbox_xyxy
@@ -191,6 +215,7 @@ class DeepSort(object):
         w = int(x2 - x1)
         h = int(y2 - y1)
         return t, l, w, h
+
 
     def _get_features(self, bbox_xywh, ori_img):
         im_crops = []
