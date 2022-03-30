@@ -40,8 +40,9 @@ class DeepSort(object):
 
         print(f"Currently using {mx.gpu(0)}")
         print('%s model is successfully loaded.' % model_name)
-
+    clear = []
     def update(self, bbox_xywh, confidences, ori_img):
+        global clear
         self.height, self.width = ori_img.shape[:2]
         # generate detections
         features = self._get_features(bbox_xywh, ori_img)
@@ -59,7 +60,8 @@ class DeepSort(object):
         # update tracker
         self.tracker.predict()
         self.tracker.update(detections)
-
+        #사람 카운트 초기화
+        count = 0
         # output bbox identities
         for track in self.tracker.tracks:
             if not track.is_confirmed() or track.time_since_update > 1:
@@ -76,8 +78,15 @@ class DeepSort(object):
             action = track.get_action(self.net)
             #action = None
             #print(f"INFO: action {action}")
+            # action = "Fight!!!"
+            count +=1
+
 
             self.draw_boxes(ori_img, bbox, track.track_id, action)
+        #사람수 count
+        counting_text = "People Counting : {}".format(count)
+        cv2.putText(ori_img, counting_text, (10, ori_img.shape[0] - 25), cv2.LINE_AA, 0.85, (0, 0, 255), 2)
+
         #     track_id = track.track_id
         #     outputs.append(np.array([x1, y1, x2, y2, track_id], dtype=np.int))
         # if len(outputs) > 0:
@@ -102,6 +111,7 @@ class DeepSort(object):
         y2 += offset[1]
         # box text and bar
         id = int(identities)
+
         color = DeepSort.compute_color_for_labels(id)
         if action:
             label = f"{id}_{action}"

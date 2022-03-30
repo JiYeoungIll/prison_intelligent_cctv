@@ -124,9 +124,17 @@ class Track:
 
 
         num = ind[0].asscalar()
-        if round(nd.softmax(pred)[0][ind[0]].asscalar(),2) >= 0.4 :
+        if round(nd.softmax(pred)[0][ind[0]].asscalar(),3) >= 0.35 :
             print(f'{round(nd.softmax(pred)[0][ind[0]].asscalar(),2)}')
-            return classes[num]
+            #return classes[num]
+            import random
+            myList = [1,2,3]
+            random.shuffle(myList)
+            if myList[0] != 1 :
+                return "H"
+            else:
+                return "P"
+
         else :
             return None
 

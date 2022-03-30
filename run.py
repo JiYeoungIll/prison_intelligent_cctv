@@ -3,6 +3,8 @@ import sys
 from PyQt5 import QtCore
 from PyQt5 import QtWidgets
 from PyQt5 import QtGui
+from PyQt5.QtWidgets import QLabel, QPushButton, QWidget, QApplication, QComboBox
+
 
 sys.path.insert(0, './yolov5')
 from subprocess import Popen, PIPE
@@ -111,16 +113,17 @@ def detect(opt, save_img=False):
     length = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
     pbar = tqdm(total=length, position=0, leave=True)
 
+    # running pyqt5 카메라 끄고켜기하기 위해
     global running
     running = True
     for frame_idx, (path, img, im0s, vid_cap) in enumerate(dataset):
         if running == False :
-            print(running)
             return 0
         start = time.time()
 
-        #img = img[:, :, 0: 480, 0: 640]
+        count = 0
 
+        #img = img[:, :, 0: 480, 0: 640]
         if True:
             img = torch.from_numpy(img).to(device)
             img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -192,7 +195,6 @@ def detect(opt, save_img=False):
                 height, width = im0.shape[:2]
                 if view_img:
                     #cv2.imshow(p, im0)
-
                     # 파이큐티 화면 출력 VideoSignal1
                     im0 = cv2.cvtColor(im0, cv2.COLOR_BGR2RGB)
                     h, w, c = im0.shape
@@ -218,26 +220,23 @@ def detect(opt, save_img=False):
 
     print('Done. (%.3fs)' % (time.time() - t0))
 
-#파이큐티 버튼 변수
 def stop():
     global running
     print("stoped..")
     running = False
     #raise StopIteration
 
-
 def start():
-    global args
     print("started..")
     detect(args)
 
 def roi():
-
     print("start roi..")
+
 def onExit():
     print("exit")
     stop()
-    sys.exit()
+
 #  웹캠 또는 영상으로 지정하는 변수 파이큐티 사용 하기위해
 device = '0'
 
@@ -282,6 +281,43 @@ if __name__ == '__main__':
     if device != '0' :
         detect(args)
     else :
+
+        app = QtWidgets.QApplication(sys.argv)
+        win = QtWidgets.QWidget()
+        vbox = QtWidgets.QVBoxLayout()
+        vbox2 = QtWidgets.QHBoxLayout()
+        VideoSignal1 = QtWidgets.QLabel()
+        combo_start = QComboBox()
+        btn_start = QtWidgets.QPushButton("카메라 켜기")
+        btn_stop = QtWidgets.QPushButton("카메라 끄기")
+        win.setWindowTitle("감시카메라")
+        win.resize(500,200)
+
+        combo_start.addItem("배회영역 설정")
+        check = QtWidgets.QPushButton("선택")
+
+        btn_start.clicked.connect(start)
+        btn_stop.clicked.connect(stop)
+
+
+        def connecttion():
+            if combo_start.currentIndexChanged() == "배회영역 설정":
+                roi()
+
+        check.clicked.connect(connecttion)
+        vbox.addWidget(VideoSignal1)
+        vbox.addLayout(vbox2)
+
+        vbox2.addWidget(btn_start)
+        vbox2.addWidget(btn_stop)
+        vbox.addWidget(combo_start)
+        vbox.addWidget(check)
+        win.setLayout(vbox)
+        win.show()
+        sys.exit(app.exec_())
+
+
+        '''
         app = QtWidgets.QApplication(sys.argv)
         win = QtWidgets.QWidget()
         vbox = QtWidgets.QVBoxLayout()
@@ -299,7 +335,6 @@ if __name__ == '__main__':
         btn_stop.clicked.connect(stop)
         red_roi.clicked.connect(roi)
         app.aboutToQuit.connect(onExit)
-        sys.exit(app.exec_())
-
+        sys.exit(app.exec_())'''
 
 
