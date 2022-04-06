@@ -28,8 +28,13 @@ import os
 
 # PYQT 카메라 ON,OFF 버튼 선택
 running = True
-# PYQT 직사각형 ROI 버튼 선택
+
+# PYQT 직사각형, 폴리곤 ROI 버튼 선택
 redrectangle_roi_pyqt = False
+redpolygon_roi_pyqt = False
+
+Choose_pyqt_Rect = False
+Choose_pyqt_Polygon = False
 
 #Color 윈도우창 ESC버튼 누른 순간 ROI 모드 활성화
 roi_mode_on = False
@@ -37,13 +42,14 @@ roi_mode_on = False
 # 마우스 상태 및 직사각형 ROI 좌표 초기화,
 mouse_is_pressing, step = False, 0
 start_x, start_y, end_x, end_y = 0,0,0,0
-
+polygon_xy_list = []
 
 # 직사각형 ROI 마우스 이벤트 핸들러 함수, 좌푯값 저장
-def Mouse_Callback_Rect(event, x, y, flags, param):
+def Mouse_Callback_Rect(event, x, y, flags, params):
     # Press The Left Button
     global step , start_x, end_x, start_y, end_y, mouse_is_pressing
-    if event == cv2.EVENT_LBUTTONDOWN:
+
+    if event == cv2.EVENT_LBUTTONDOWN :
         step = 1
         mouse_is_pressing = True
         start_x = x
@@ -64,6 +70,22 @@ def Mouse_Callback_Rect(event, x, y, flags, param):
     else:
         print("Error : Mouse_Callback_Rect 함수 예외처리")
 
+# 폴리곤 ROI 마우스 이벤트 핸들러 함수, 좌푯값 저장
+def Mouse_Callback_Polygon(event, x, y, flags, params):
+    # Press The Left Button
+    global polygon_xy_list, step
+
+    if event == cv2.EVENT_LBUTTONDOWN:
+        step = 100
+        xy_list = [x, y]
+        polygon_xy_list.append(xy_list)
+    elif event == cv2.EVENT_RBUTTONDOWN:
+        step = 200
+    elif event == cv2.EVENT_MBUTTONDOWN:
+        step = 0
+        polygon_xy_list.clear()
+    else:
+        print("Error : Mouse_Callback_Proygon 함수 예외처리")
 
 # 직사각형 ROI 그리기 및 좌표값 변환 함수, 만약 Roi Mode 활성화 시 직사각형이 사라짐
 def draw_roi_rectangle(img, step, start_x, end_x, start_y, end_y):
@@ -90,27 +112,54 @@ def draw_roi_rectangle(img, step, start_x, end_x, start_y, end_y):
                 end_y = 0
             start_y, end_y = end_y, start_y
 
-    return img, step, start_x, end_x, start_y, end_y
+    return img, start_x, end_x, start_y, end_y
+
+# 폴리곤 ROI 그리기 및 좌표값 변환 함수
+def draw_roi_polygon(img, step, polygon_xy_list):
+    # Click The Mouse Button
+    if step == 100:
+        np_xy = np.array(polygon_xy_list)
+        for i in range(len(np_xy)):
+            cv2.circle(img, (np_xy[i][0], np_xy[i][1]), 10, (0, 255, 0), -1)
+            cv2.polylines(img, [np_xy], False, (0, 255, 0), 3)
+    elif step == 200:
+        np_xy = np.array(polygon_xy_list)
+        for i in range(len(np_xy)):
+            cv2.polylines(img, [np_xy], True, (0, 255, 255), 3)
+    return img
 
 
+# 박스 크기 조절 해주는 함수
 def bbox_rel(*xyxy):
     """" Calculates the relative bounding box from absolute pixel values. """
-    bbox_left = min([xyxy[0].item(), xyxy[2].item()])
-    bbox_top = min([xyxy[1].item(), xyxy[3].item()])
-    bbox_w = abs(xyxy[0].item() - xyxy[2].item())
-    bbox_h = abs(xyxy[1].item() - xyxy[3].item())
-    x_c = (bbox_left + bbox_w / 2)
-    y_c = (bbox_top + bbox_h / 2)
-    w = bbox_w
-    h = bbox_h
+    global start_x, start_y
+    if roi_mode_on == True:
+        bbox_left = min([xyxy[0].item(), xyxy[2].item()]) + (start_x)
+        bbox_top = min([xyxy[1].item(), xyxy[3].item()]) + (start_y)
+        bbox_w = abs(xyxy[0].item() - xyxy[2].item())
+        bbox_h = abs(xyxy[1].item() - xyxy[3].item())
+        x_c = (bbox_left + bbox_w / 2)
+        y_c = (bbox_top + bbox_h / 2)
+        w = bbox_w
+        h = bbox_h
+    elif roi_mode_on == False:
+        bbox_left = min([xyxy[0].item(), xyxy[2].item()])
+        bbox_top = min([xyxy[1].item(), xyxy[3].item()])
+        bbox_w = abs(xyxy[0].item() - xyxy[2].item())
+        bbox_h = abs(xyxy[1].item() - xyxy[3].item())
+        x_c = (bbox_left + bbox_w / 2)
+        y_c = (bbox_top + bbox_h / 2)
+        w = bbox_w
+        h = bbox_h
     return x_c, y_c, w, h
 
 # 메인 실행함수
 def detect(opt, save_img=False):
     global running
-    global redrectangle_roi_pyqt, roi_mode_on
-    global start_x, start_y, end_x, end_y
+    global redrectangle_roi_pyqt, redpolygon_roi_pyqt, roi_mode_on
+    global start_x, start_y, end_x, end_y, polygon_xy_list
     global step, mouse_is_pressing
+    global Choose_pyqt_Rect, Choose_pyqt_Polygon
 
 
     # pyqt start 버튼 누르면 다시 실행 될 수 있도록 True 설정
@@ -131,7 +180,7 @@ def detect(opt, save_img=False):
                         max_age=cfg.DEEPSORT.MAX_AGE, n_init=cfg.DEEPSORT.N_INIT, nn_budget=cfg.DEEPSORT.NN_BUDGET,
                         use_cuda=True)
 
-
+    wander = {}
     # Initialize
     device = select_device(opt.device)
     if os.path.exists(out):
@@ -205,14 +254,18 @@ def detect(opt, save_img=False):
 
         # Color 윈도우창을 이용해 마우스 좌푯값을 수정했을때만 실행
         if not (start_x == 0 or end_x == 0 or start_y == 0 or end_y == 0):
-            # ROI Mode 활성화 및 마우스 좌표 설정이 끝났을 때
-            if (roi_mode_on == True) and (mouse_is_pressing==False) :
-                end_y = end_y - ((end_y - start_y) % 32)
-                end_x = end_x - ((end_x - start_x) % 32)
+            # 직사각형, 폴리곤 메시지박스 선택 했을때
+            if Choose_pyqt_Rect == True or Choose_pyqt_Polygon == True:
+                # ROI Mode 활성화 및 마우스 좌표 설정이 끝났을 때
+                if (roi_mode_on == True) and (mouse_is_pressing==False) :
+                    end_y = end_y - ((end_y - start_y) % 32)
+                    end_x = end_x - ((end_x - start_x) % 32)
 
-                # 실제, 직사각형 ROI 영역 지정
-                img = img[:, :, start_y: end_y, start_x: end_x]
-                print(f"직사각형 ROI 영역 좌푯값 == start_x : {start_x}, start_y : {start_y}, end_x : {end_x}, end_y : {end_y}")
+                    # 실제, 직사각형 ROI 영역 지정 ㅎㅎ
+                    img = img[:, :, start_y: end_y, start_x: end_x]
+                    print(f"직사각형 ROI 영역 좌푯값 == start_x : {start_x}, start_y : {start_y}, end_x : {end_x}, end_y : {end_y}")
+            else:
+                print("PYQT 메시지 박스 '직사각형' 과 '폴리곤' 중 선택 하세요")
 
 
         img = torch.from_numpy(img).to(device)
@@ -248,8 +301,14 @@ def detect(opt, save_img=False):
 
             if det is not None and len(det):
                 # Rescale boxes from img_size to im0 size
-                det[:, :4] = scale_coords(
-                    img.shape[2:], det[:, :4], im0.shape).round()
+                # ROI영역 안의 박스크기 조절
+                if roi_mode_on == True:
+                    im02 = im0[start_y: end_y, start_x: end_x]
+                    det[:, :4] = scale_coords(
+                        img.shape[2:], det[:, :4], im02.shape).round()
+                elif roi_mode_on == False:
+                    det[:, :4] = scale_coords(
+                        img.shape[2:], det[:, :4], im0.shape).round()
 
                 # Print results
                 for c in det[:, -1].unique():
@@ -263,6 +322,7 @@ def detect(opt, save_img=False):
                 for *xyxy, conf, cls in det:
                     x_c, y_c, bbox_w, bbox_h = bbox_rel(*xyxy)
                     obj = [x_c, y_c, bbox_w, bbox_h]
+
                     bbox_xywh.append(obj)
                     confs.append([conf.item()])
 
@@ -270,7 +330,7 @@ def detect(opt, save_img=False):
                 confss = torch.Tensor(confs)
 
                 # Pass detections to deepsort
-                im0 = deepsort.update(xywhs, confss, im0)
+                im0 = deepsort.update(xywhs, confss, im0, wander)
 
                 # # draw boxes for visualization
                 # if len(outputs) > 0:
@@ -297,30 +357,67 @@ def detect(opt, save_img=False):
             if view_img:
                 #cv2.imshow(p, im0)
 
-                # PYQT 직사각형 ROI 버튼을 누를시 Color 윈도우창 생성 및 직사각형 그리기
-                if redrectangle_roi_pyqt == True:
-                    cv2.namedWindow("Color")
-                    cv2.setMouseCallback("Color", Mouse_Callback_Rect)
+                # 직사각형 메시지 선택 했을때 OR 폴리곤 메시지 선택 했을때만 실행
+                if Choose_pyqt_Rect == True or Choose_pyqt_Polygon == True :
+                    # PYQT ROI 활성화 버튼을 누를시 Color 윈도우창 생성 및 직사각형 그리기
+                    if redrectangle_roi_pyqt == True:
 
-                    im0, step, start_x, end_x, start_y, end_y = draw_roi_rectangle(im0, step, start_x, end_x, start_y, end_y)
+                        cv2.namedWindow("Color")
+                        cv2.setMouseCallback("Color", Mouse_Callback_Rect)
 
-                    # 마우스 눌렀다 때면 PYQT 창에도 휘발성으로 직사각형을 그림
-                    if step == 3 :
-                        #redrectangle_roi_pyqt = False # 만약 눌렀다 떈 동시에 윈도우창을 끄고 싶으면
-                        cv2.rectangle(im0, (start_x, start_y), (end_x, end_y), (0, 255, 255), 3)
+                        im0, start_x, end_x, start_y, end_y = draw_roi_rectangle(im0, step, start_x, end_x, start_y, end_y)
 
-                    cv2.imshow("Color", im0)
-                    key = cv2.waitKey(1)
+                        # 마우스 눌렀다 때면 PYQT 창에도 휘발성으로 노란색 직사각형을 그림
+                        if step == 3 :
+                            #redrectangle_roi_pyqt = False # 만약 눌렀다 떈 동시에 윈도우창을 끄고 싶으면
+                            cv2.rectangle(im0, (start_x, start_y), (end_x, end_y), (0, 255, 255), 3)
 
-                    # esc 누를경우, ROI 직사각형 좌표 설정 종료 및 RoI Mode 활성화
-                    if key == 27:
-                        redrectangle_roi_pyqt = False
-                        cv2.destroyWindow("Color")
-                        roi_mode_on = True
+                        cv2.imshow("Color", im0)
+                        key = cv2.waitKey(1)
 
-                # ROI Mode 활성화 시 PYQT 창에 직사각형 고정
+                        # esc 누를경우, ROI 직사각형 좌표 설정 종료 및 RoI Mode 활성화
+                        if key == 27:
+                            redrectangle_roi_pyqt = False
+                            cv2.destroyWindow("Color")
+                            roi_mode_on = True
+                            mouse_is_pressing = False
+
+                    # PYQT ROI 활성화 버튼을 누를시 Color 윈도우창 생성 및 폴리곤 점 찍고 선 이어주기
+                    elif redpolygon_roi_pyqt == True:
+
+                            cv2.namedWindow("Polygon_Window")
+                            cv2.setMouseCallback("Polygon_Window", Mouse_Callback_Polygon)
+
+                            im0 = draw_roi_polygon(im0, step, polygon_xy_list)
+
+                            cv2.imshow("Polygon_Window", im0)
+                            key = cv2.waitKey(1)
+
+                            # esc 누를경우, ROI 직사각형 좌표 설정 종료 및 RoI Mode 활성화
+                            if key == 27:
+                                np_xy = np.array(polygon_xy_list)
+                                p_x, p_y, p_w, p_h  = cv2.boundingRect(np_xy)
+                                start_x, end_x, start_y, end_y = p_x, (p_w + p_x), p_y, (p_h + p_y)
+                                redpolygon_roi_pyqt = False
+                                cv2.destroyWindow("Polygon_Window")
+                                roi_mode_on = True
+
+
+                # ROI Mode 활성화 시 PYQT 창에 직사각형 고정, 이부분 오류날수도
                 if roi_mode_on == True:
-                    cv2.rectangle(im0, (start_x, start_y), (end_x, end_y), (0, 255, 255), 3)
+                    # 직사각형 메시지 선택 했을때
+                    if Choose_pyqt_Rect == True :
+                        cv2.rectangle(im0, (start_x, start_y), (end_x, end_y), (0, 0, 255), 3)
+                    elif Choose_pyqt_Polygon == True :
+                        np_xy = np.array(polygon_xy_list)
+                        for i in range(len(np_xy)):
+                            cv2.polylines(im0, [np_xy], True, (0, 0, 255), 3)
+
+                            # 테스트 박스
+                            pp_x, pp_y, pp_w, pp_h = cv2.boundingRect(np_xy)
+                            cv2.rectangle(im0, (pp_x, pp_y), ((pp_w + p_x), (pp_h + p_y)), (255, 0, 255), 3)
+
+
 
 
                 # 파이큐티 화면 출력 VideoSignal1
@@ -349,7 +446,6 @@ def detect(opt, save_img=False):
 
     print('Done. (%.3fs)' % (time.time() - t0))
 
-
 # PYQT 버튼 동작 함수
 def start():
     global args
@@ -363,27 +459,52 @@ def stop():
     # raise StopIteration
 
 def roi_on():
-    global redrectangle_roi_pyqt
+    global Choose_pyqt_Rect, Choose_pyqt_Polygon
+    global redrectangle_roi_pyqt, redpolygon_roi_pyqt
     print("start roi..")
-    redrectangle_roi_pyqt = True
+    if Choose_pyqt_Rect == True :
+        redrectangle_roi_pyqt = True
+        redpolygon_roi_pyqt = False
+    elif Choose_pyqt_Polygon == True :
+        redrectangle_roi_pyqt = False
+        redpolygon_roi_pyqt = True
 
 def roi_off():
-    global start_x, start_y, end_x, end_y, step, roi_mode_on, mouse_is_pressing, redrectangle_roi_pyqt
+    global start_x, start_y, end_x, end_y, step, roi_mode_on, mouse_is_pressing, redrectangle_roi_pyqt, redpolygon_roi_pyqt
     print("roi off..")
     redrectangle_roi_pyqt = False
+    redpolygon_roi_pyqt = False
     step = 0
     start_x, start_y, end_x, end_y = 0, 0, 0, 0
     roi_mode_on = False
 
-    mouse_is_pressing = False,
-    redrectangle_roi_pyqt = False
-
+    mouse_is_pressing = False
     cv2.destroyWindow("Color")
+    polygon_xy_list.clear()
+    cv2.destroyWindow("Polygon_Window")
 
 def onExit():
     print("exit")
     stop()
     sys.exit()
+
+
+def connecttion():
+    global Choose_pyqt_Rect, Choose_pyqt_Polygon
+    if combo_start.currentText() == "Rect":
+        Choose_pyqt_Rect = True
+        Choose_pyqt_Polygon = False
+        print(combo_start.currentText())
+        print("You choose Rect_Mode ..")
+    elif combo_start.currentText() == "Polygon":
+        Choose_pyqt_Rect = False
+        Choose_pyqt_Polygon = True
+        print(combo_start.currentText())
+        print("You choose Polygon_Mode ..")
+    elif combo_start.currentText() == "ROI Mode Setting":
+        Choose_pyqt_Rect = False
+        Choose_pyqt_Polygon = False
+        print("Please select ROI Mode")
 
 
 #  웹캠 또는 영상으로 지정하는 변수 파이큐티 사용 하기위해
@@ -447,7 +568,9 @@ if __name__ == '__main__':
         win.setWindowTitle("Prison Artificial Intelligent CCTV")
         win.resize(500,200)
 
-        combo_start.addItem("배회영역 설정")
+        combo_start.addItem("ROI Mode Setting")
+        combo_start.addItem("Rect")
+        combo_start.addItem("Polygon")
         check = QtWidgets.QPushButton("선택")
 
         btn_start.clicked.connect(start)
@@ -455,13 +578,6 @@ if __name__ == '__main__':
         btn_roi_on.clicked.connect(roi_on)
         btn_roi_off.clicked.connect(roi_off)
 
-
-        def connecttion():
-            if combo_start.currentText() == "배회영역 설정":
-                print(combo_start.currentText())
-                global redrectangle_roi_pyqt
-                print("start roi..")
-                redrectangle_roi_pyqt = True
 
         check.clicked.connect(connecttion)
         vbox.addWidget(VideoSignal1)
@@ -493,10 +609,9 @@ if __name__ == '__main__':
     win.setLayout(vbox)
     win.show()
     btn_start.clicked.connect(start)
-    btn_stop.clicked.connect(stop)
+    btn_stop.clicked.connect(그만)
     red_roi.clicked.connect(roi)
     app.aboutToQuit.connect(onExit)
     sys.exit(app.exec_())
     '''
-
 
