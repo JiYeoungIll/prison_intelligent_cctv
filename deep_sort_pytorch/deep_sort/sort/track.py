@@ -121,7 +121,6 @@ class Track:
         # Fighting Mode 일시 16으로 설정
         clip_input = clip_input.reshape((-1,) + (16, 3, 224, 224))
         # 명령 Mode 일시 32으로 설정
-
         clip_input = np.transpose(clip_input, (0, 2, 1, 3, 4))
 
 
@@ -130,8 +129,9 @@ class Track:
 
         # topk로 라벨 분류 최종 갯수 선택 가능
         classes = net.classes
-        topK = 2
+        topK = 3
         ind = nd.topk(pred, k=topK)[0].astype('int')
+
 
         # 라벨 종류 출력
         print("-----------------------------------------------------------------------------------------")
@@ -142,22 +142,29 @@ class Track:
 
         num = ind[0].asscalar()
 
+        f_list = ["Hitting","Wiping","Spinning","Throwing", "Pulling", "Putting"]
+        # 확률 50% 이상일 시 확률 출력 및 실행
+        for i in range(topK):
+            if nd.softmax(pred)[0][ind[i]].asscalar() >= 0.5 :
+                if classes[ind[i].asscalar()] in f_list :
+                    print(f'tjliqwjielfjltlqkflasdjo;itj;alsdfj;lkasjdf;oiajs;oidfj{classes[ind[i].asscalar()]}')
+                    return "Warning Action"
+
+
         # 확률 35% 이상일 시 확률 출력 및 실행
-        if round(nd.softmax(pred)[0][ind[0]].asscalar(), 3) >= 0.35:
+        #if round(nd.softmax(pred)[0][ind[0]].asscalar(), 3) >= 0.1 or (classes[num]== "Hitting") or (classes[num]== "Wiping"):
+        '''if True:
             print(f'{round(nd.softmax(pred)[0][ind[0]].asscalar(), 2)}')
-
-            return classes[num]
-
-            # import random
-            # myList = [1, 2, 3]
-            # random.shuffle(myList)
-            #if myList[0] != 1:
-            #    return "H"
-            #else:
-            #    return "P"
-
+            f_list = ["Hitting","Wiping","Spinning","Throwing","Turning", "Pulling", "Pushing", "Putting", 'Moving']
+            for i in range(len(f_list)):
+                if classes[num] in f_list[i]:
+                    print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                    
+                    #return classes[num]
+                else:
+                    return None
         else:
-            return None
+            return None'''
 
 
     def to_tlwh(self):
