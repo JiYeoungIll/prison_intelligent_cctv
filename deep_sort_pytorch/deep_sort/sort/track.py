@@ -145,7 +145,7 @@ class Track:
         f_list = ["Hitting","Wiping","Spinning","Throwing", "Pulling", "Putting"]
         # 확률 50% 이상일 시 확률 출력 및 실행
         for i in range(topK):
-            if nd.softmax(pred)[0][ind[i]].asscalar() >= 0.5 :
+            if nd.softmax(pred)[0][ind[i]].asscalar() >= 0.4 :
                 if classes[ind[i].asscalar()] in f_list :
                     print(f'tjliqwjielfjltlqkflasdjo;itj;alsdfj;lkasjdf;oiajs;oidfj{classes[ind[i].asscalar()]}')
                     return "Warning Action"

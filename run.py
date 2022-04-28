@@ -25,6 +25,10 @@ import torch.backends.cudnn as cudnn
 from tqdm import tqdm
 import numpy as np
 import os
+import pymysql
+
+
+
 
 # PYQT 카메라 ON,OFF 버튼 선택
 running = True
@@ -49,6 +53,8 @@ mouse_is_pressing, step = False, 0
 start_x, start_y, end_x, end_y = 0, 0, 0, 0
 
 polygon_xy_list = []
+
+
 
 
 
@@ -239,6 +245,8 @@ def detect(opt, save_img=False):
     txt_path = str(Path(out)) + '/results.txt'
 
     vid = cv2.VideoCapture(source)
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    writer = cv2.VideoWriter('output.avi', fourcc, 6.0, (640, 480))
 
     filename = os.path.basename(source).split('.')[0]
     save_path = f"inference/output/{filename}_action.mp4"
@@ -436,6 +444,7 @@ def detect(opt, save_img=False):
 
 
                 # 파이큐티 화면 출력 VideoSignal1
+                writer.write(im0)
                 im0 = cv2.cvtColor(im0, cv2.COLOR_BGR2RGB)
                 h, w, c = im0.shape
                 qImg = QtGui.QImage(im0.data, w, h, w * c, QtGui.QImage.Format_RGB888)
@@ -458,6 +467,7 @@ def detect(opt, save_img=False):
         pipe.stdin.close()
         pipe.wait()
         pbar.close()
+    writer.release()
 
     print('Done. (%.3fs)' % (time.time() - t0))
 
@@ -504,6 +514,10 @@ def onExit():
     sys.exit()
 
 
+
+
+
+
 def connecttion():
     global Choose_pyqt_Rect, Choose_pyqt_Polygon
     if radio_rectangle.isChecked():
@@ -525,8 +539,8 @@ def connecttion():
 
 #  웹캠 또는 영상으로 지정하는 변수 파이큐티 사용 하기위해
 #device = 'inference/test_small_resize.mp4'
-device = "inference/qoghl.mp4"
-#device = '0'
+#device = "inference/qoghl.mp4"
+device = '0'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -583,6 +597,8 @@ if __name__ == '__main__':
         vbox3 = QtWidgets.QVBoxLayout()
         vbox4 = QtWidgets.QVBoxLayout()
         vbox5 = QtWidgets.QVBoxLayout()
+        vbox6 = QtWidgets.QVBoxLayout()
+
 
         gbox = QtWidgets.QGroupBox()
         gbox.setTitle("Camera")
@@ -590,6 +606,8 @@ if __name__ == '__main__':
         gbox2.setTitle("ROI")
         gbox3 = QtWidgets.QGroupBox()
         gbox3.setTitle("ROI Mode Select")
+        gbox4 = QtWidgets.QGroupBox()
+        gbox4.setTitle("Mode")
 
         btn_start = QtWidgets.QPushButton("Camera on")
         btn_stop = QtWidgets.QPushButton("Camera off")
@@ -597,6 +615,9 @@ if __name__ == '__main__':
         btn_roi_off = QtWidgets.QPushButton("ROI 비활성화")
         radio_polygon = QtWidgets.QRadioButton("Polygon")
         radio_rectangle = QtWidgets.QRadioButton("Rectangle")
+        mode1 = QtWidgets.QPushButton("평소모드")
+        mode2 = QtWidgets.QPushButton("명령모드")
+        mode3 = QtWidgets.QPushButton("비활성화")
 
         vbox3.addWidget(btn_start)
         vbox3.addWidget(btn_stop)
@@ -604,14 +625,20 @@ if __name__ == '__main__':
         vbox4.addWidget(btn_roi_off)
         vbox5.addWidget(radio_polygon)
         vbox5.addWidget(radio_rectangle)
+        vbox6.addWidget(mode1)
+        vbox6.addWidget(mode2)
+        vbox6.addWidget(mode3)
 
         gbox.setLayout(vbox3)
         gbox2.setLayout(vbox4)
         gbox3.setLayout(vbox5)
+        gbox4.setLayout(vbox6)
+
 
         vbox2.addWidget(gbox)
         vbox2.addWidget(gbox2)
         vbox2.addWidget(gbox3)
+        vbox2.addWidget(gbox4)
 
         win.setStyleSheet(
             "background-color: rgb(34, 32, 41)"
@@ -625,6 +652,10 @@ if __name__ == '__main__':
             "background-color: rgb(47, 42, 53)"
         )
         gbox3.setStyleSheet(
+            "color: white;"
+            "background-color: rgb(47, 42, 53)"
+        )
+        gbox4.setStyleSheet(
             "color: white;"
             "background-color: rgb(47, 42, 53)"
         )

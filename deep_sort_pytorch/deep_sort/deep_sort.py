@@ -9,9 +9,12 @@ from .sort.detection import Detection
 from .sort.tracker import Tracker
 from gluoncv.model_zoo import get_model
 import mxnet as mx
+import pymysql
 
 __all__ = ['DeepSort']
 palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
+
+
 
 
 class DeepSort(object):
@@ -59,6 +62,10 @@ class DeepSort(object):
         scores = np.array([d.confidence for d in detections])
         indices = non_max_suppression(boxes, self.nms_max_overlap, scores)
         detections = [detections[i] for i in indices]
+        #db연결
+        conn = pymysql.connect(host="localhost", user='root', password="123456789", db="cctv_db",
+                               charset="utf8")
+        curs = conn.cursor()
 
         # update tracker
         self.tracker.predict()
@@ -104,7 +111,8 @@ class DeepSort(object):
             else:
                 # 동영상 가라시 추가 if x11 >= 450 and x22 <= 950 and y11 >= 200 and y22 <= 600:
                 # 5초 배회하면 배회중
-                if stime - wander[track.track_id][0] >= 25:
+                sec = 5
+                if stime - wander[track.track_id][0] >= sec:
                     # num = track.track_id
                     # num = (num)*"  " + str(num) + ","
                     wander_text = 'Person roaming'
@@ -125,9 +133,9 @@ class DeepSort(object):
                         del wander[dif[i]]
 
             # action 인식하고 출력하는 부분
-            #action = track.get_action(self.net)
+            action = track.get_action(self.net)
             #action = 'Warning Action'
-            action = None
+            #action = None
 
             # action이 Warning 일시 점수 부여
             if len(fw_queue) >= 100:
@@ -145,11 +153,17 @@ class DeepSort(object):
                     fight_time.clear()
                     fight_time.append(True)
                     fight_time.append(round(time.time()))
+                if((round(time.time())%7)==0):
+                    sql = """insert into time(action, time)
+                                                values(%s, now())"""
+                    curs.execute(sql, ('danger'))
+                    conn.commit()
                 action = 'Dangerous Action'
             elif fight_time[0] == True:
                 tm_minus = round(time.time())-fight_time[1]
                 #if tm_minus > 5:
-                if tm_minus > 50:
+                #Dangerous Action 유지시간
+                if tm_minus > 8:
                     fight_time.clear()
                     fight_time.append(False)
                     fight_time.append(0)
@@ -166,7 +180,7 @@ class DeepSort(object):
         # 인원 수 count
         counting_text = "People Counting : {}".format(count)
         cv2.putText(ori_img, counting_text, (10, ori_img.shape[0] - 25), cv2.LINE_AA, 0.85, (0, 0, 255), 2)
-        cv2.rectangle(ori_img, (450, 200), (950, 600), (0, 0, 255), 3)
+        #동영상 가라시 추가 cv2.rectangle(ori_img, (450, 200), (950, 600), (0, 0, 255), 3)
 
         #     track_id = track.track_id
         #     outputs.append(np.array([x1, y1, x2, y2, track_id], dtype=np.int))
