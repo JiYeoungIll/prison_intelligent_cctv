@@ -1,7 +1,8 @@
 # vim: expandtab:ts=4:sw=4
-
+import time
 from collections import deque
 import mxnet as mx
+import pymysql
 from mxnet import gluon, nd, image
 from mxnet.gluon.data.vision import transforms
 from gluoncv.data.transforms import video
@@ -106,7 +107,7 @@ class Track:
         self.frames.append(frame)
 
 
-    def get_action(self, net):
+    def get_action(self, net, action_mode="fight"):
         if len(self.frames) < self.SAMPLE_DURATION:
             return None
 
@@ -116,6 +117,10 @@ class Track:
         print(f"INFO: action input shape:")
         print([clip.shape for clip in clip_input])
         clip_input = np.stack(clip_input, axis=0)
+        # db연결
+        conn = pymysql.connect(host="localhost", user='root', password="123456789", db="cctv_db",
+                               charset="utf8")
+        curs = conn.cursor()
 
 
         # Fighting Mode 일시 16으로 설정
@@ -132,7 +137,6 @@ class Track:
         topK = 3
         ind = nd.topk(pred, k=topK)[0].astype('int')
 
-
         # 라벨 종류 출력
         print("-----------------------------------------------------------------------------------------")
         for i in range(topK):
@@ -140,32 +144,31 @@ class Track:
                   (classes[ind[i].asscalar()], nd.softmax(pred)[0][ind[i]].asscalar()))
         print("-----------------------------------------------------------------------------------------")
 
-        num = ind[0].asscalar()
+        #num = ind[0].asscalar()
 
-        f_list = ["Hitting","Wiping","Spinning","Throwing", "Pulling", "Putting"]
-        # 확률 50% 이상일 시 확률 출력 및 실행
-        for i in range(topK):
-            if nd.softmax(pred)[0][ind[i]].asscalar() >= 0.4 :
-                if classes[ind[i].asscalar()] in f_list :
-                    print(f'tjliqwjielfjltlqkflasdjo;itj;alsdfj;lkasjdf;oiajs;oidfj{classes[ind[i].asscalar()]}')
-                    return "Warning Action"
+        # f_list = ["Hitting", "Wiping", "Spinning", "Throwing", "Pulling", "Putting"]
+        f_list = ["Hitting", "Throwing"]
+        f2_list = ['hand on head', 'Get down', 'clap' ]
 
+        if action_mode == "fight":
+            for i in range(topK):
+                if nd.softmax(pred)[0][ind[i]].asscalar() >= 0.4:
+                    #if classes[ind[i].asscalar()] in f_list:
+                    #2초마다 데이ㅓ베이스에 입력
+                    if classes[ind[i].asscalar()] in f_list:
+                        #if ((round(time.time()) % 2) == 0):
+                        sql = """insert into time(action, time)
+                                                                    values(%s, now())"""
+                        curs.execute(sql, ('warning'))
+                        conn.commit()
+                        return "Warning Action"
 
-        # 확률 35% 이상일 시 확률 출력 및 실행
-        #if round(nd.softmax(pred)[0][ind[0]].asscalar(), 3) >= 0.1 or (classes[num]== "Hitting") or (classes[num]== "Wiping"):
-        '''if True:
-            print(f'{round(nd.softmax(pred)[0][ind[0]].asscalar(), 2)}')
-            f_list = ["Hitting","Wiping","Spinning","Throwing","Turning", "Pulling", "Pushing", "Putting", 'Moving']
-            for i in range(len(f_list)):
-                if classes[num] in f_list[i]:
-                    print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-                    
-                    #return classes[num]
-                else:
-                    return None
-        else:
-            return None'''
-
+        elif action_mode == "control":
+            for i in range(topK):
+                if nd.softmax(pred)[0][ind[i]].asscalar() >= 0.2:
+                    #if classes[ind[i].asscalar()] in f_list
+                    if classes[ind[i].asscalar()] in f2_list:
+                        return classes[ind[i].asscalar()]
 
     def to_tlwh(self):
         """Get current position in bounding box format `(top left x, top left y,
