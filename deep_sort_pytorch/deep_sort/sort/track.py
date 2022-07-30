@@ -1,14 +1,10 @@
-# vim: expandtab:ts=4:sw=4
-
 from collections import deque
 import mxnet as mx
+import pymysql
 from mxnet import gluon, nd, image
-from mxnet.gluon.data.vision import transforms
 from gluoncv.data.transforms import video
-from gluoncv import utils
 import numpy as np
 import cv2
-from gluoncv.data.transforms.pose import detector_to_alpha_pose, heatmap_to_coord_alpha_pose
 
 
 class TrackState:
@@ -90,9 +86,8 @@ class Track:
         self._max_age = max_age
 
 
-        # Fighting Mode 일시 16으로 설정
+        # Fighting Mode 일시 16으로 설정 (명령 Mode 일시 32으로 설정)
         self.SAMPLE_DURATION = 16
-        # 명령 Mode 일시 32으로 설정
 
         self.frames = deque(maxlen=self.SAMPLE_DURATION)
         self.action = None
@@ -106,7 +101,7 @@ class Track:
         self.frames.append(frame)
 
 
-    def get_action(self, net):
+    def get_action(self, net, action_mode="fight", track_id="No_Id"):
         if len(self.frames) < self.SAMPLE_DURATION:
             return None
 
@@ -117,20 +112,23 @@ class Track:
         print([clip.shape for clip in clip_input])
         clip_input = np.stack(clip_input, axis=0)
 
+        # db연결
+        conn = pymysql.connect(host="localhost", user='root', password="123456789", db="cctv_db",
+                               charset="utf8")
+        curs = conn.cursor()
+        curs2 = conn.cursor()
 
-        # Fighting Mode 일시 16으로 설정
+        # Fighting Mode 일시 16으로 설정(명령 Mode 일시 32으로 설정)
         clip_input = clip_input.reshape((-1,) + (16, 3, 224, 224))
-        # 명령 Mode 일시 32으로 설정
 
         clip_input = np.transpose(clip_input, (0, 2, 1, 3, 4))
-
 
         # pred는 2차원배열이며, type이 ndarry : <class 'mxnet.ndarray.ndarray.NDArray'>
         pred = net(nd.array(clip_input, ctx=mx.gpu(0)))
 
         # topk로 라벨 분류 최종 갯수 선택 가능
         classes = net.classes
-        topK = 2
+        topK = 3
         ind = nd.topk(pred, k=topK)[0].astype('int')
 
         # 라벨 종류 출력
@@ -140,25 +138,46 @@ class Track:
                   (classes[ind[i].asscalar()], nd.softmax(pred)[0][ind[i]].asscalar()))
         print("-----------------------------------------------------------------------------------------")
 
-        num = ind[0].asscalar()
+        # num = ind[0].asscalar()
 
-        # 확률 35% 이상일 시 확률 출력 및 실행
-        if round(nd.softmax(pred)[0][ind[0]].asscalar(), 3) >= 0.35:
-            print(f'{round(nd.softmax(pred)[0][ind[0]].asscalar(), 2)}')
+        f1_list = ["Hitting"] #f_list = ["Hitting", "Wiping", "Spinning", "Throwing", "Pulling", "Putting"] # f_list = ["Hitting", "Throwing"]
+        f2_list = ['Get down', 'situp'] # f2_list = ['hand on head', 'Get down', situp]
+        f3_list = ['smoke', 'chew', "eat"]
 
-            return classes[num]
 
-            # import random
-            # myList = [1, 2, 3]
-            # random.shuffle(myList)
-            #if myList[0] != 1:
-            #    return "H"
-            #else:
-            #    return "P"
+        if action_mode == "fight":
+            for i in range(topK):
+                if classes[ind[i].asscalar()] in f1_list:
+                    if nd.softmax(pred)[0][ind[i]].asscalar() >= 0.4:
+                        # 2초마다 데이터베이스에 입력
+                        sql = """insert into all_in_one(id, action, time)
+                                                             values(%s, %s, now())"""
+                        sql2 = """select distinct id, action from all_in_one"""
 
-        else:
-            return None
+                        curs2.execute(sql2)
+                        rows = curs2.fetchall()
+                        a = []
+                        for i in range(len(rows)):
+                            a.append(rows[i])
+                        if (str(track_id), 'warning') not in a:
+                            curs.execute(sql, (track_id, 'warning'))
+                        conn.commit()
+                        return "Warning Action"
 
+
+        elif action_mode == "falling_down":
+            for i in range(topK):
+                if nd.softmax(pred)[0][ind[i]].asscalar() >= 0.2:
+                    if classes[ind[i].asscalar()] in f2_list:
+                        return "Warning Action"
+                        #return classes[ind[i].asscalar()]
+
+
+        elif action_mode == "smoking":
+            for i in range(topK):
+                if nd.softmax(pred)[0][ind[i]].asscalar() >= 0.2:
+                    if classes[ind[i].asscalar()] in f3_list:
+                        return classes[ind[i].asscalar()]
 
     def to_tlwh(self):
         """Get current position in bounding box format `(top left x, top left y,
