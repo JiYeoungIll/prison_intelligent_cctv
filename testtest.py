@@ -1,3 +1,6 @@
+import cv2
+
+
 def Mouse_Callback(event, x, y, flags, step, start_x, end_x, start_y, end_y, mouse_is_pressing):
     # Press The Left Button
     if event == cv2.EVENT_LBUTTONDOWN:

@@ -1,4 +1,4 @@
-from Realtime import Realime_graph
+from yolov5.Realtime import Realime_graph
 from PyQt5.QtCore import QTimer
 import sys
 import pymysql
